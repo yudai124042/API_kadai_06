@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>クーポン管理アプリ V2</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <!-- ここに後で<style>タグを追加します -->
+
+    <!-- (既存のCDNリンクの下に追加) -->
+    <style>
+        /* スムーズな画面遷移のための基本スタイル */
+        .screen {
+            /* display: none; */ /* JavaScriptで制御 */
+            /* animation: fadeIn 0.3s ease-out; */ /* 必要に応じてアニメーション追加 */
+        }
+
+        /* フローティングアクションボタンの配置調整 (もしTailwindのfixedで不十分な場合) */
+        /* #addCouponBtn { } */
+
+        /* ローディングスピナー (Tailwindにないので定義) */
+        .loading-spinner {
+            border: 4px solid #f3f4f6; /* Light gray */
+            border-top: 4px solid #3b82f6; /* Blue */
+            border-radius: 50%;
+            width: 32px; /* 少し小さく */
+            height: 32px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* モーダルの表示アニメーション（任意） */
+        .modal-enter {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+        .modal-enter-active {
+            opacity: 1;
+            transform: scale(1);
+            transition: opacity 300ms, transform 300ms;
+        }
+        .modal-leave {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .modal-leave-active {
+            opacity: 0;
+            transform: scale(0.95);
+            transition: opacity 300ms, transform 300ms;
+        }
+
+        /* input type="date" のプレースホルダー風表示 (ブラウザ依存あり) */
+        input[type="date"]:not(:valid):before {
+            content: attr(placeholder);
+            color: #a0aec0; /* gray-500 */
+        }
+        /* Webkit系ブラウザで日付未選択時のアイコンを消す（任意） */
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            /* display: none; */
+        }
+        /* Webkit系ブラウザで日付未選択時のテキスト色 */
+        input[type="date"] {
+            color: #4a5568; /* gray-700, 通常のテキスト色 */
+        }
+        input[type="date"].empty {
+            color: #a0aec0; /* gray-500, プレースホルダー色 */
+        }
+
+
+        /* カスタムスクロールバー（任意、モーダルなど長いコンテンツ用） */
+        /* ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e0; 
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a0aec0; 
+        } */
+
+    </style>
+
+        
+</head>
+<body class="bg-gray-100 font-sans">
+
+    <!-- メインコンテンツエリア -->
+    <div id="app" class="max-w-lg mx-auto">
+
+        <!-- クーポン一覧画面 -->
+        <div id="couponListScreen" class="p-4">
+            <header class="mb-6">
+                <h1 class="text-3xl font-bold text-gray-800 text-center">マイクーポン</h1>
+            </header>
+
+            <div class="mb-4">
+                <input type="text" id="searchCouponInput" placeholder="クーポン名で検索..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            </div>
+
+            <div id="couponListContainer" class="space-y-4">
+                <!-- ダミークーポンカード (JavaScriptで動的に生成予定) -->
+                <div class="bg-white p-5 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h2 class="text-xl font-semibold text-gray-700">スーパー〇〇 10% OFF</h2>
+                            <p class="text-sm text-gray-500">金額/割引: 10% OFF</p>
+                        </div>
+                        <span class="text-xs bg-red-100 text-red-700 font-semibold px-2 py-1 rounded-full">期限: あと3日</span>
+                    </div>
+                    <div class="mt-3 pt-3 border-t border-gray-200">
+                        <p class="text-sm text-gray-600">有効期限: 2025-06-22</p>
+                    </div>
+                     <div class="mt-2 flex justify-end space-x-2">
+                        <button class="text-sm text-blue-500 hover:text-blue-700 edit-coupon-btn" data-id="dummy1">編集</button>
+                        <button class="text-sm text-red-500 hover:text-red-700 delete-coupon-btn" data-id="dummy1">削除</button>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h2 class="text-xl font-semibold text-gray-700">カフェ△△ ドリンク一杯無料</h2>
+                            <p class="text-sm text-gray-500">金額/割引: 1杯無料</p>
+                        </div>
+                        <span class="text-xs bg-yellow-100 text-yellow-700 font-semibold px-2 py-1 rounded-full">期限: あと10日</span>
+                    </div>
+                    <div class="mt-3 pt-3 border-t border-gray-200">
+                        <p class="text-sm text-gray-600">有効期限: 2025-06-29</p>
+                    </div>
+                    <div class="mt-2 flex justify-end space-x-2">
+                        <button class="text-sm text-blue-500 hover:text-blue-700 edit-coupon-btn" data-id="dummy2">編集</button>
+                        <button class="text-sm text-red-500 hover:text-red-700 delete-coupon-btn" data-id="dummy2">削除</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- フローティングアクションボタン -->
+            <button id="addCouponBtn" class="fixed bottom-6 right-6 bg-blue-500 hover:bg-blue-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-transform duration-300 hover:scale-110">
+                <i class="fas fa-plus text-2xl"></i>
+            </button>
+        </div>
+
+        <!-- クーポン追加/編集画面 (初期状態では非表示) -->
+        <div id="couponFormScreen" class="p-4 hidden">
+            <header class="mb-6 flex items-center">
+                <button id="backToListBtn" class="text-blue-500 hover:text-blue-700 mr-4">
+                    <i class="fas fa-arrow-left fa-lg"></i>
+                </button>
+                <h1 id="formScreenTitle" class="text-3xl font-bold text-gray-800">クーポンを追加</h1>
+            </header>
+
+            <!-- 画像選択エリア -->
+            <div class="mb-6 p-4 bg-white rounded-lg shadow">
+                <h2 class="text-lg font-semibold text-gray-700 mb-3">クーポン画像</h2>
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <button id="cameraBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center transition-colors duration-300">
+                        <i class="fas fa-camera mr-2"></i>カメラで撮影
+                    </button>
+                    <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden">
+                    <button id="fileBtn" class="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center transition-colors duration-300">
+                        <i class="fas fa-upload mr-2"></i>ファイル選択
+                    </button>
+                    <input type="file" id="fileInput" accept="image/*" class="hidden">
+                </div>
+                <div id="imagePreviewContainer" class="hidden mt-4 text-center">
+                    <img id="previewImg" class="max-w-full h-auto mx-auto rounded-lg shadow-md mb-3" style="max-height: 200px;" alt="画像プレビュー">
+                    <button id="ocrExecuteBtn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-300">
+                        <i class="fas fa-text-recognition mr-2"></i>この画像から情報を読み取る
+                    </button>
+                </div>
+                 <!-- 処理中表示 -->
+                <div id="loadingDiv" class="hidden text-center py-4">
+                    <div class="loading-spinner mx-auto mb-2"></div>
+                    <p class="text-gray-600">OCR処理中...</p>
+                </div>
+            </div>
+            
+            <!-- エラー表示エリア -->
+            <div id="errorDisplay" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+                <strong class="font-bold">エラー: </strong>
+                <span class="block sm:inline" id="errorDisplayText"></span>
+            </div>
+
+            <!-- クーポン情報入力フォーム -->
+            <div class="space-y-5 bg-white p-6 rounded-lg shadow">
+                <div>
+                    <label for="couponName" class="block text-sm font-medium text-gray-700 mb-1">クーポン名 <span class="text-red-500">*</span></label>
+                    <input type="text" id="couponName" name="couponName" placeholder="例: スーパー〇〇 10% OFF" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label for="couponExpiry" class="block text-sm font-medium text-gray-700 mb-1">有効期限 <span class="text-red-500">*</span></label>
+                    <input type="date" id="couponExpiry" name="couponExpiry" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label for="couponAmount" class="block text-sm font-medium text-gray-700 mb-1">金額・割引内容 <span class="text-red-500">*</span></label>
+                    <input type="text" id="couponAmount" name="couponAmount" placeholder="例: 500円OFF, 10%割引, 1杯無料" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label for="couponMemo" class="block text-sm font-medium text-gray-700 mb-1">メモ (任意)</label>
+                    <textarea id="couponMemo" name="couponMemo" rows="3" placeholder="利用条件、対象商品など" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
+                </div>
+                <input type="hidden" id="couponId" value=""> <!-- 編集時に使用 -->
+                <button id="saveCouponBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300">
+                    <i class="fas fa-save mr-2"></i>クーポンを保存
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- OCR結果表示モーダル (初期状態では非表示) -->
+    <div id="ocrResultModal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[80vh] overflow-y-auto p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold text-gray-800">OCR読み取り結果</h2>
+                <button id="closeOcrModalBtn" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times fa-lg"></i>
+                </button>
+            </div>
+            <div id="ocrModalContent" class="text-sm text-gray-700 space-y-1">
+                <!-- JavaScriptでOCR結果をここに挿入 -->
+            </div>
+            <p class="mt-4 text-xs text-gray-500">この結果を参考に、上のフォームに情報を入力してください。</p>
+        </div>
+    </div>
+
+    <!-- ここに後で<script>タグを追加します -->
+     <script>
+        // === グローバル設定・変数 ===
+        // ★★★ APIキーをここに設定してください ★★★
+        // これはテスト用です。本番環境ではクライアントサイドにAPIキーを置かないでください。
+        const GOOGLE_VISION_API_KEY = ; // ← 必ずご自身の有効なAPIキーに置き換えてください
+        const GOOGLE_VISION_API_URL = `
+
+        let coupons = [ /* ダミーデータは初期表示用、またはFirebase連携までの仮として残してもOK */
+            { id: 'dummy1', name: 'スーパー〇〇 10% OFF', expiryDate: '2025-06-22', amount: '10% OFF', memo: '一部商品除く', ocrTextLines: ["スーパー〇〇", "10% OFF", "有効期限 2025年06月22日"] },
+        ];
+        let currentEditingCouponId = null;
+        let ocrRawTextResult = null; // OCRで取得した生のテキスト全体を保持
+        let currentImageDataBase64 = null; // 現在処理中の画像のBase64データ
+
+        // === DOM要素の遅延初期化 (DOMContentLoaded内で実施) ===
+        // (前回と同様のDOM要素取得処理 ... 省略せずに記述してください)
+        let couponListScreen, couponFormScreen, ocrResultModal, couponListContainer,
+            addCouponBtn, searchCouponInput, backToListBtn, formScreenTitle,
+            cameraBtn, cameraInput, fileBtn, fileInput, imagePreviewContainer,
+            previewImg, ocrExecuteBtn, loadingDiv, errorDisplay, errorDisplayText,
+            couponNameInput, couponExpiryInput, couponAmountInput, couponMemoInput,
+            couponIdInput, saveCouponBtn, ocrModalContent, closeOcrModalBtn;
+
+
+        // === 初期化処理 ===
+        document.addEventListener('DOMContentLoaded', () => {
+            // DOM要素の取得 (前回と同様)
+            couponListScreen = document.getElementById('couponListScreen');
+            couponFormScreen = document.getElementById('couponFormScreen');
+            ocrResultModal = document.getElementById('ocrResultModal');
+            couponListContainer = document.getElementById('couponListContainer');
+            addCouponBtn = document.getElementById('addCouponBtn');
+            searchCouponInput = document.getElementById('searchCouponInput');
+            backToListBtn = document.getElementById('backToListBtn');
+            formScreenTitle = document.getElementById('formScreenTitle');
+            cameraBtn = document.getElementById('cameraBtn');
+            cameraInput = document.getElementById('cameraInput');
+            fileBtn = document.getElementById('fileBtn');
+            fileInput = document.getElementById('fileInput');
+            imagePreviewContainer = document.getElementById('imagePreviewContainer');
+            previewImg = document.getElementById('previewImg');
+            ocrExecuteBtn = document.getElementById('ocrExecuteBtn');
+            loadingDiv = document.getElementById('loadingDiv');
+            errorDisplay = document.getElementById('errorDisplay');
+            errorDisplayText = document.getElementById('errorDisplayText');
+            couponNameInput = document.getElementById('couponName');
+            couponExpiryInput = document.getElementById('couponExpiry');
+            couponAmountInput = document.getElementById('couponAmount');
+            couponMemoInput = document.getElementById('couponMemo');
+            couponIdInput = document.getElementById('couponId');
+            saveCouponBtn = document.getElementById('saveCouponBtn');
+            ocrModalContent = document.getElementById('ocrModalContent');
+            closeOcrModalBtn = document.getElementById('closeOcrModalBtn');
+
+            if (!couponListScreen || !addCouponBtn) {
+                console.error("いくつかのDOM要素の取得に失敗しました。HTMLのIDが正しいか確認してください。");
+                showError("アプリの初期化に失敗しました。画面をリロードしてください。");
+                return;
+            }
+
+            renderCouponList();
+            showScreen('list');
+
+            addCouponBtn.addEventListener('click', showAddCouponForm);
+            backToListBtn.addEventListener('click', () => showScreen('list'));
+            cameraBtn.addEventListener('click', () => cameraInput.click());
+            fileBtn.addEventListener('click', () => fileInput.click());
+            cameraInput.addEventListener('change', handleImageUpload);
+            fileInput.addEventListener('change', handleImageUpload);
+            ocrExecuteBtn.addEventListener('click', runActualOCR); // executeMockOCR から変更
+            closeOcrModalBtn.addEventListener('click', closeOcrResultModal);
+            saveCouponBtn.addEventListener('click', handleSaveCoupon);
+            searchCouponInput.addEventListener('input', handleSearch);
+            setupDateInputPlaceholder(couponExpiryInput, 'YYYY-MM-DD');
+            couponListContainer.addEventListener('click', (event) => {
+                const editButton = event.target.closest('.edit-coupon-btn');
+                const deleteButton = event.target.closest('.delete-coupon-btn');
+                if (editButton) handleEditCoupon(editButton.dataset.id);
+                if (deleteButton) handleDeleteCoupon(deleteButton.dataset.id);
+            });
+        });
+
+        // === 画面表示制御 ===
+        // (前回と同様 ... 省略せずに記述してください)
+        function showScreen(screenName) {
+            if (!couponListScreen || !couponFormScreen) {
+                console.error("画面要素が初期化されていません。");
+                return;
+            }
+            couponListScreen.classList.add('hidden');
+            couponFormScreen.classList.add('hidden');
+
+            if (screenName === 'list') {
+                couponListScreen.classList.remove('hidden');
+                resetCouponForm();
+            } else if (screenName === 'form') {
+                couponFormScreen.classList.remove('hidden');
+            }
+        }
+
+        // === クーポンリスト関連 ===
+        // (前回と同様の renderCouponList, calculateDaysRemaining, formatDate, handleSearch ... 省略せずに記述してください)
+        function renderCouponList(filteredCoupons = coupons) {
+            if (!couponListContainer) return;
+            couponListContainer.innerHTML = '';
+            if (!filteredCoupons || filteredCoupons.length === 0) {
+                couponListContainer.innerHTML = '<p class="text-center text-gray-500">登録されているクーポンはありません。</p>';
+                return;
+            }
+            const sortedCoupons = [...filteredCoupons].sort((a, b) => {
+                const dateA = new Date(a.expiryDate); const dateB = new Date(b.expiryDate);
+                if (isNaN(dateA) && isNaN(dateB)) return 0; if (isNaN(dateA)) return 1; if (isNaN(dateB)) return -1;
+                return dateA - dateB;
+            });
+            sortedCoupons.forEach(coupon => {
+                const daysRemaining = calculateDaysRemaining(coupon.expiryDate);
+                let expirationHighlightClass = 'bg-green-100 text-green-700';
+                let expirationText = `期限: あと${daysRemaining}日`;
+                if (isNaN(daysRemaining) || daysRemaining < 0) {
+                    expirationHighlightClass = 'bg-gray-200 text-gray-600'; expirationText = '期限切れ';
+                } else if (daysRemaining === 0) {
+                    expirationHighlightClass = 'bg-red-100 text-red-700'; expirationText = '本日まで';
+                } else if (daysRemaining <= 3) {
+                    expirationHighlightClass = 'bg-red-100 text-red-700';
+                } else if (daysRemaining <= 7) {
+                    expirationHighlightClass = 'bg-yellow-100 text-yellow-700';
+                }
+                const couponCardHtml = `
+                    <div class="bg-white p-5 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 coupon-card" data-id="${coupon.id}">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h2 class="text-xl font-semibold text-gray-700">${escapeHtml(coupon.name)}</h2>
+                                <p class="text-sm text-gray-500">金額/割引: ${escapeHtml(coupon.amount)}</p>
+                            </div>
+                            <span class="text-xs ${expirationHighlightClass} font-semibold px-2 py-1 rounded-full">${expirationText}</span>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-gray-200">
+                            <p class="text-sm text-gray-600">有効期限: ${formatDate(coupon.expiryDate)}</p>
+                            ${coupon.memo ? `<p class="text-xs text-gray-500 mt-1">メモ: ${escapeHtml(coupon.memo)}</p>` : ''}
+                        </div>
+                        <div class="mt-2 flex justify-end space-x-3">
+                            <button class="text-sm text-blue-500 hover:text-blue-700 font-medium edit-coupon-btn" data-id="${coupon.id}"><i class="fas fa-edit mr-1"></i>編集</button>
+                            <button class="text-sm text-red-500 hover:text-red-700 font-medium delete-coupon-btn" data-id="${coupon.id}"><i class="fas fa-trash-alt mr-1"></i>削除</button>
+                        </div>
+                    </div>`;
+                couponListContainer.innerHTML += couponCardHtml;
+            });
+        }
+        function calculateDaysRemaining(expiryDateStr) {
+            if (!expiryDateStr) return NaN;
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const parts = expiryDateStr.split('-');
+            if (parts.length !== 3) return NaN;
+            const expiryDate = new Date(parts[0], parts[1] - 1, parts[2]); expiryDate.setHours(0,0,0,0);
+            if (isNaN(expiryDate.getTime())) return NaN;
+            const diffTime = expiryDate.getTime() - today.getTime();
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        }
+        function formatDate(dateStr) {
+            if (!dateStr) return 'N/A';
+            const parts = dateStr.split('-');
+            if (parts.length !== 3) return '日付形式エラー';
+            const date = new Date(parts[0], parts[1] - 1, parts[2]);
+            if (isNaN(date.getTime())) return '無効な日付';
+            return date.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+        function handleSearch() {
+            if (!searchCouponInput) return;
+            const searchTerm = searchCouponInput.value.toLowerCase();
+            const filtered = coupons.filter(coupon => coupon.name && coupon.name.toLowerCase().includes(searchTerm));
+            renderCouponList(filtered);
+        }
+
+        // === クーポンフォーム関連 ===
+        // (前回と同様の showAddCouponForm, handleEditCoupon, resetCouponForm ... 省略せずに記述してください)
+        function showAddCouponForm() {
+            currentEditingCouponId = null;
+            if (formScreenTitle) formScreenTitle.textContent = 'クーポンを追加';
+            resetCouponForm(); // フォームとOCR結果キャッシュをリセット
+            showScreen('form');
+        }
+        function handleEditCoupon(couponId) {
+            const coupon = coupons.find(c => c.id === couponId);
+            if (coupon) {
+                currentEditingCouponId = coupon.id;
+                if (formScreenTitle) formScreenTitle.textContent = 'クーポンを編集';
+                if (couponNameInput) couponNameInput.value = coupon.name || '';
+                if (couponExpiryInput) couponExpiryInput.value = coupon.expiryDate || '';
+                if (couponAmountInput) couponAmountInput.value = coupon.amount || '';
+                if (couponMemoInput) couponMemoInput.value = coupon.memo || '';
+                if (couponIdInput) couponIdInput.value = coupon.id;
+                ocrRawTextResult = coupon.ocrRawText || null; // 生のOCRテキストも復元
+                currentImageDataBase64 = coupon.imageBase64 || null; // 画像データも復元（あれば）
+                if (previewImg && currentImageDataBase64) {
+                    previewImg.src = currentImageDataBase64;
+                    if(imagePreviewContainer) imagePreviewContainer.classList.remove('hidden');
+                } else {
+                    if(imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
+                    if(previewImg) previewImg.src = '';
+                }
+                if (couponExpiryInput) updateDateInputStyle(couponExpiryInput);
+                showScreen('form');
+            } else { showError('該当のクーポンが見つかりませんでした。'); }
+        }
+        function resetCouponForm() {
+            if (couponNameInput) couponNameInput.value = '';
+            if (couponExpiryInput) couponExpiryInput.value = '';
+            if (couponAmountInput) couponAmountInput.value = '';
+            if (couponMemoInput) couponMemoInput.value = '';
+            if (couponIdInput) couponIdInput.value = '';
+            if (imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
+            if (previewImg) previewImg.src = '';
+            hideError();
+            if (loadingDiv) loadingDiv.classList.add('hidden');
+            ocrRawTextResult = null;
+            currentImageDataBase64 = null;
+            currentEditingCouponId = null;
+            if (couponExpiryInput) updateDateInputStyle(couponExpiryInput);
+        }
+
+
+        function handleImageUpload(event) {
+            hideError();
+            const file = event.target.files[0];
+            if (!file) return;
+            if (!file.type.startsWith('image/')) {
+                showError('画像ファイルを選択してください。');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                currentImageDataBase64 = e.target.result; // Base64データを保持
+                if (previewImg) previewImg.src = currentImageDataBase64;
+                if (imagePreviewContainer) imagePreviewContainer.classList.remove('hidden');
+            };
+            reader.onerror = () => { showError('画像の読み込みに失敗しました。'); };
+            reader.readAsDataURL(file);
+            if(event.target) event.target.value = null;
+        }
+
+        // === OCR処理と情報抽出 ===
+        async function runActualOCR() {
+            if (!currentImageDataBase64) {
+                showError('まず画像を選択してください。');
+                return;
+            }
+            if (GOOGLE_VISION_API_KEY === 'YOUR_GOOGLE_CLOUD_VISION_API_KEY' || !GOOGLE_VISION_API_KEY) {
+                showError('APIキーが設定されていません。コード内の GOOGLE_VISION_API_KEY を設定してください。');
+                return;
+            }
+
+            if (loadingDiv) loadingDiv.classList.remove('hidden');
+            hideError();
+            ocrRawTextResult = null; // 前回の結果をクリア
+
+            try {
+                const base64Image = currentImageDataBase64.split(',')[1];
+                const requestBody = {
+                    requests: [{
+                        image: { content: base64Image },
+                        features: [{ type: 'TEXT_DETECTION', maxResults: 1 }] // 全体テキスト取得なのでmaxResultsは1で十分
+                    }]
+                };
+                const response = await fetch(GOOGLE_VISION_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({})); // エラーレスポンスのJSONパース試行
+                    const detail = errorData.error ? errorData.error.message : response.statusText;
+                    throw new Error(`Vision APIリクエスト失敗: ${response.status} ${detail}`);
+                }
+
+                const data = await response.json();
+                if (data.responses && data.responses[0] && data.responses[0].fullTextAnnotation) {
+                    ocrRawTextResult = data.responses[0].fullTextAnnotation.text;
+                    const lines = ocrRawTextResult.split('\n').filter(line => line.trim() !== '');
+                    renderOcrResultModal(lines); // モーダルには行ごとのテキストを表示
+                    showOcrResultModal();
+                    
+                    // --- 情報抽出とフォームへの自動入力 ---
+                    extractAndPopulateCouponInfo(ocrRawTextResult);
+
+                } else if (data.responses && data.responses[0] && data.responses[0].error) {
+                    throw new Error(`Vision APIエラー: ${data.responses[0].error.message}`);
+                } else {
+                    showError('テキストが検出されませんでした。画像を変えるか、手動で入力してください。');
+                    renderOcrResultModal(["テキストが検出されませんでした。"]); // モーダルにも表示
+                    showOcrResultModal();
+                }
+            } catch (error) {
+                console.error('OCR処理エラー:', error);
+                showError('OCR処理中にエラーが発生しました: ' + error.message);
+                renderOcrResultModal([`エラー: ${error.message}`]); // モーダルにも表示
+                showOcrResultModal();
+            } finally {
+                if (loadingDiv) loadingDiv.classList.add('hidden');
+            }
+        }
+
+        function extractAndPopulateCouponInfo(fullText) {
+            if (!fullText) return;
+
+            const extractedName = extractCouponName(fullText);
+            const extractedDate = extractExpiryDate(fullText);
+            const extractedAmount = extractAmount(fullText);
+
+            if (couponNameInput && extractedName) couponNameInput.value = extractedName;
+            if (couponExpiryInput && extractedDate) {
+                couponExpiryInput.value = extractedDate; // YYYY-MM-DD 形式
+                updateDateInputStyle(couponExpiryInput);
+            }
+            if (couponAmountInput && extractedAmount) couponAmountInput.value = extractedAmount;
+        }
+
+        function extractCouponName(text) {
+            // 簡単な抽出ロジック: 最初の数行（空行除く）を連結、または特定のキーワードまで
+            const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            if (lines.length > 0) {
+                // 例: 最初の1行、または2行までを候補とする
+                let nameCandidate = lines[0];
+                if (lines.length > 1 && (lines[0].length < 15 || lines[0].includes("クーポン"))) { // 1行目が短いか"クーポン"を含むなら2行目も
+                    nameCandidate += " " + lines[1];
+                }
+                return nameCandidate.substring(0, 50); // 長すぎる場合はカット
+            }
+            return ''; // 適切な名前が見つからない場合は空
+        }
+
+        function extractExpiryDate(text) {
+            // 多様な日付形式に対応する正規表現 (例)
+            // YYYY年MM月DD日, YYYY/MM/DD, YYYY-MM-DD, MM月DD日, MM/DD, 令和N年, 平成N年 など
+            // 抽出後、YYYY-MM-DD形式に正規化する必要がある
+            const patterns = [
+                /(?:令和|平成)\s?(\d{1,2}|元)年\s?(\d{1,2})月\s?(\d{1,2})日/i, // 令和5年8月31日
+                /(\d{4})年\s?(\d{1,2})月\s?(\d{1,2})日/i,                 // 2023年08月31日
+                /(\d{4})\s?[./-]\s?(\d{1,2})\s?[./-]\s?(\d{1,2})/i,        // 2023/08/31 or 2023-8-31
+                /(\d{1,2})月\s?(\d{1,2})日/i,                             // 8月31日 (年は今年と仮定)
+                /(\d{1,2})\s?[./-]\s?(\d{1,2})/i                           // 08/31 (年は今年と仮定)
+            ];
+            
+            for (const pattern of patterns) {
+                const match = text.replace(/[\s　]+/g, '').match(pattern); // 全角スペースも除去してマッチ
+                if (match) {
+                    let year, month, day;
+                    if (match[0].includes('年') && match[0].includes('月') && match[0].includes('日')) { // YYYY年MM月DD日 or R/H年MM月DD日
+                        if (match[0].toLowerCase().includes('令和') || match[0].toLowerCase().includes('平成')) {
+                            let eraYear = match[1] === '元' ? 1 : parseInt(match[1]);
+                            if (match[0].toLowerCase().includes('令和')) year = eraYear + 2018; // 令和元年 = 2019年
+                            else if (match[0].toLowerCase().includes('平成')) year = eraYear + 1988; // 平成元年 = 1989年
+                        } else {
+                            year = parseInt(match[1]);
+                        }
+                        month = parseInt(match[2]);
+                        day = parseInt(match[3]);
+                    } else if (match.length === 4 && match[1].length === 4) { // YYYY/MM/DD or YYYY-MM-DD
+                        year = parseInt(match[1]);
+                        month = parseInt(match[2]);
+                        day = parseInt(match[3]);
+                    } else if (match.length === 3) { // MM月DD日 or MM/DD (今年と仮定)
+                        year = new Date().getFullYear(); // 今年
+                        month = parseInt(match[1]);
+                        day = parseInt(match[2]);
+                    }
+
+                    if (year && month && day) {
+                        // 日付の妥当性チェック (簡易)
+                        if (month < 1 || month > 12 || day < 1 || day > 31) continue;
+                        try {
+                            // Dateオブジェクトで検証し、フォーマットする
+                            const dateObj = new Date(year, month - 1, day);
+                            if (dateObj.getFullYear() === year && dateObj.getMonth() === month - 1 && dateObj.getDate() === day) {
+                                return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                            }
+                        } catch (e) { /* ignore */ }
+                    }
+                }
+            }
+            // "まで" や "期限" の近くの日付を探す (追加ロジック)
+            const keywordDateMatch = text.match(/(有効期限|期限|まで)\s?[:：]?\s?((?:令和|平成)?\s?\d{1,4}年?\s?\d{1,2}月?\s?\d{1,2}日?|\d{4}\s?[./-]\s?\d{1,2}\s?[./-]\s?\d{1,2}|\d{1,2}\s?[./-]\s?\d{1,2})/i);
+            if (keywordDateMatch && keywordDateMatch[2]) {
+                // keywordDateMatch[2] にも上のパターンマッチを再帰的に適用できると良いが、ここでは単純化
+                // 上のパターンで再度keywordDateMatch[2]を試す
+                for (const pattern of patterns) {
+                     const specificMatch = keywordDateMatch[2].replace(/[\s　]+/g, '').match(pattern);
+                     if (specificMatch) return extractExpiryDate(keywordDateMatch[2]); // 再帰呼び出しで正規化
+                }
+            }
+
+            return ''; // 見つからない場合は空
+        }
+
+        function extractAmount(text) {
+            // 金額や割引率のパターン (例: 1,000円, ¥500, 10% OFF, 20パーセント割引)
+            const patterns = [
+                /(\d{1,3}(?:,\d{3})*|\d+)\s?(?:円|yen)\s?(?:off|オフ|引|引き|割引)?/i, // 1,000円, 500円OFF
+                /[¥$￥]\s?(\d{1,3}(?:,\d{3})*|\d+)/i,                             // ¥1000, $50
+                /(\d+(?:\.\d+)?)\s?(?:%|パーセント)\s?(?:off|オフ|引|引き|割引)/i, // 10% OFF, 20 パーセント割引
+                /(\d+(?:\.\d+)?)\s?(割引|割)/i, // 3割引, 2割 (これは扱いが難しい)
+                /(?:一杯|１杯|一個|１個)\s?無料/i // 一杯無料 (特定のフレーズ)
+            ];
+            for (const pattern of patterns) {
+                const match = text.match(pattern);
+                if (match) {
+                    if (match[0].toLowerCase().includes("無料")) return match[0]; // 「無料」系はそのまま
+                    return match[0]; // マッチした全体を返す (例: "500円OFF", "10%")
+                }
+            }
+            // "金額" キーワードの近くを探す
+            const keywordAmountMatch = text.match(/(?:金額|価格)\s?[:：]?\s?([¥$￥]?\s?\d{1,3}(?:,\d{3})*(?:\.\d+)?\s?(?:円|%|パーセント)?(?:off|オフ|引|引き|割引)?)/i);
+            if (keywordAmountMatch && keywordAmountMatch[1]) {
+                return keywordAmountMatch[1];
+            }
+
+            return ''; // 見つからない場合は空
+        }
+        
+        function renderOcrResultModal(linesArray) { // 引数を配列に統一
+            if (!ocrModalContent) return;
+            ocrModalContent.innerHTML = '';
+            if (linesArray && linesArray.length > 0) {
+                linesArray.forEach(line => {
+                    const p = document.createElement('p');
+                    p.textContent = escapeHtml(line);
+                    ocrModalContent.appendChild(p);
+                });
+            } else {
+                ocrModalContent.innerHTML = '<p>テキストが検出されませんでした。</p>';
+            }
+        }
+
+        function showOcrResultModal() { if (ocrResultModal) ocrResultModal.classList.remove('hidden'); }
+        function closeOcrResultModal() { if (ocrResultModal) ocrResultModal.classList.add('hidden'); }
+
+        // === クーポン保存・削除 ===
+        // (前回と同様の handleSaveCoupon, handleDeleteCoupon ... 省略せずに記述してください)
+        function handleSaveCoupon() {
+            if (!couponNameInput || !couponExpiryInput || !couponAmountInput) { showError("フォーム要素の取得に失敗しました。"); return; }
+            const name = couponNameInput.value.trim();
+            const expiry = couponExpiryInput.value;
+            const amount = couponAmountInput.value.trim();
+            if (!name || !expiry || !amount) { showError('クーポン名、有効期限、金額・割引内容は必須です。'); return; }
+            hideError();
+            const couponData = {
+                name: name, expiryDate: expiry, amount: amount,
+                memo: couponMemoInput ? couponMemoInput.value.trim() : '',
+                ocrRawText: ocrRawTextResult, // 生のOCRテキスト全体を保存
+                imageBase64: currentImageDataBase64 // 画像データも保存
+            };
+            if (currentEditingCouponId) {
+                couponData.id = currentEditingCouponId;
+                const index = coupons.findIndex(c => c.id === currentEditingCouponId);
+                if (index > -1) coupons[index] = couponData;
+            } else {
+                couponData.id = `coupon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                coupons.push(couponData);
+            }
+            console.log('保存されるクーポンデータ:', couponData);
+            renderCouponList();
+            showScreen('list');
+            alert('クーポンが（仮）保存されました！\n（まだFirebaseには連携していません）');
+        }
+        function handleDeleteCoupon(couponId) {
+            if (confirm('このクーポンを本当に削除しますか？')) {
+                coupons = coupons.filter(c => c.id !== couponId);
+                renderCouponList();
+                alert('クーポンが（仮）削除されました！');
+            }
+        }
+
+        // === ユーティリティ ===
+        // (前回と同様の escapeHtml, showError, hideError, setupDateInputPlaceholder, updateDateInputStyle ... 省略せずに記述してください)
+        function escapeHtml(text) {
+            if (text === null || typeof text === 'undefined') return '';
+            if (typeof text !== 'string') text = String(text);
+            const div = document.createElement('div'); div.textContent = text; return div.innerHTML;
+        }
+        function showError(message) {
+            if (errorDisplay && errorDisplayText) {
+                errorDisplayText.textContent = message; errorDisplay.classList.remove('hidden');
+            } else { console.error("エラー表示要素が見つかりません:", message); alert("エラー: " + message); }
+        }
+        function hideError() { if (errorDisplay) errorDisplay.classList.add('hidden'); }
+        function setupDateInputPlaceholder(dateInput, placeholderText) {
+            if (!dateInput) return;
+            dateInput.setAttribute('placeholder', placeholderText);
+            updateDateInputStyle(dateInput);
+            dateInput.addEventListener('input', () => updateDateInputStyle(dateInput));
+            dateInput.addEventListener('change', () => updateDateInputStyle(dateInput));
+        }
+        function updateDateInputStyle(dateInput) {
+            if (!dateInput) return;
+            if (dateInput.value) { dateInput.classList.remove('empty'); } else { dateInput.classList.add('empty'); }
+        }
+
+    </script>

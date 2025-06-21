@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>クーポンOCRアプリ（表形式出力版）- APIキーチェック修正版</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+
+     <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .shadow-custom {
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        .table-striped tbody tr:nth-child(odd) {
+            background-color: #f8fafc;
+        }
+        .expiration-highlight {
+            background-color: #fef3c7;
+            border: 2px solid #f59e0b;
+            border-radius: 4px;
+            padding: 2px 4px;
+            font-weight: bold;
+        }
+        .loading-spinner {
+            border: 4px solid #f3f4f6;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="gradient-bg py-6">
+        <div class="container mx-auto px-4">
+            <h1 class="text-4xl font-bold text-white text-center">
+                <i class="fas fa-ticket-alt mr-3"></i>
+                クーポンOCRアプリ
+            </h1>
+            <p class="text-white text-center mt-2 opacity-90">
+                クーポンの写真を撮影して文字を読み取り、表形式で表示します
+            </p>
+        </div>
+    </div>
+
+    <div class="container mx-auto px-4 py-8">
+        <!-- 撮影・アップロードセクション -->
+        <div class="bg-white rounded-lg shadow-custom p-6 mb-8">
+            <h2 class="text-2xl font-semibold mb-6 text-gray-800">
+                <i class="fas fa-camera mr-2 text-blue-500"></i>
+                クーポンを撮影・アップロード
+            </h2>
+
+            <!-- エラー表示エリア -->
+            <div id="errorDisplay" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+                <strong class="font-bold">エラー: </strong>
+                <span class="block sm:inline" id="errorDisplayText"></span>
+            </div>
+            
+            <div class="grid md:grid-cols-2 gap-4 mb-6">
+                <div class="text-center">
+                    <button id="cameraBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-6 rounded-lg transition duration-300 transform hover:scale-105">
+                        <i class="fas fa-camera text-2xl mb-2"></i>
+                        <div>カメラで撮影</div>
+                    </button>
+                    <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden">
+                </div>
+                
+                <div class="text-center">
+                    <button id="fileBtn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-6 rounded-lg transition duration-300 transform hover:scale-105">
+                        <i class="fas fa-upload text-2xl mb-2"></i>
+                        <div>ファイルを選択</div>
+                    </button>
+                    <input type="file" id="fileInput" accept="image/*" class="hidden">
+                </div>
+            </div>
+
+            <!-- プレビューエリア -->
+            <div id="imagePreview" class="hidden mb-6">
+                <h3 class="text-lg font-semibold mb-3 text-gray-700">撮影した画像</h3>
+                <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                    <img id="previewImg" class="max-w-full h-auto mx-auto rounded-lg shadow-md" alt="プレビュー">
+                </div>
+            </div>
+
+            <!-- 処理中表示 -->
+            <div id="loadingDiv" class="hidden text-center py-8" aria-live="polite">
+                <div class="loading-spinner mx-auto mb-4"></div>
+                <p class="text-gray-600">OCR処理中...</p>
+            </div>
+        </div>
+
+        <!-- OCR結果表示セクション -->
+        <div id="resultsSection" class="hidden bg-white rounded-lg shadow-custom p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-semibold text-gray-800">
+                    <i class="fas fa-table mr-2 text-green-500"></i>
+                    OCR読み取り結果
+                </h2>
+                <button id="exportCsvBtn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                    <i class="fas fa-download mr-2"></i>
+                    CSVエクスポート
+                </button>
+            </div>
+
+            <!-- 期限情報ハイライト -->
+            <div id="expirationInfo" class="hidden mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-r-lg">
+                <h3 class="text-lg font-semibold text-yellow-800 mb-2">
+                    <i class="fas fa-calendar-alt mr-2"></i>
+                    検出された期限情報
+                </h3>
+                <div id="expirationDetails" class="text-yellow-700"></div>
+            </div>
+
+            <!-- OCR結果テーブル -->
+            <div class="overflow-x-auto">
+                <table id="ocrTable" class="min-w-full table-striped border border-gray-300">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th scope="col" class="border border-gray-300 px-4 py-3 text-left text-sm font-semibold text-gray-700">行番号</th>
+                            <th scope="col" class="border border-gray-300 px-4 py-3 text-left text-sm font-semibold text-gray-700">読み取りテキスト</th>
+                            <th scope="col" class="border border-gray-300 px-4 py-3 text-left text-sm font-semibold text-gray-700">文字数</th>
+                            <th scope="col" class="border border-gray-300 px-4 py-3 text-left text-sm font-semibold text-gray-700">種別</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ocrTableBody">
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 統計情報 -->
+            <div id="statsSection" class="mt-6 grid md:grid-cols-4 gap-4">
+                <div class="bg-blue-50 p-4 rounded-lg text-center">
+                    <div class="text-2xl font-bold text-blue-600" id="totalLines">0</div>
+                    <div class="text-sm text-blue-500">総行数</div>
+                </div>
+                <div class="bg-green-50 p-4 rounded-lg text-center">
+                    <div class="text-2xl font-bold text-green-600" id="totalChars">0</div>
+                    <div class="text-sm text-green-500">総文字数</div>
+                </div>
+                <div class="bg-yellow-50 p-4 rounded-lg text-center">
+                    <div class="text-2xl font-bold text-yellow-600" id="dateCount">0</div>
+                    <div class="text-sm text-yellow-500">日付情報</div>
+                </div>
+                <div class="bg-purple-50 p-4 rounded-lg text-center">
+                    <div class="text-2xl font-bold text-purple-600" id="numberCount">0</div>
+                    <div class="text-sm text-purple-500">数値情報</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === 設定 ===
+        // ★★★ 重要: APIキーはクライアントサイドに直接記述しないでください ★★★
+
+        const API_KEY = // ユーザー指定のAPIキー
+        const API_URL = 
+
+        const OCR_SETTINGS = {
+            MAX_RESULTS: 100,
+        };
+
+        const CLASSIFICATION_RULES = [
+            { type: '日付', patterns: [ /\d{4}[\/\-年]\d{1,2}[\/\-月]\d{1,2}[日]?/, /\d{1,2}[\/\-月]\d{1,2}[日]?/, /令和\d+年\d{1,2}月\d{1,2}日/, /平成\d+年\d{1,2}月\d{1,2}日/, /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2},? \d{4}/i ]},
+            { type: '価格', patterns: [/[￥$]\s?\d+(?:,\d{3})*(?:\.\d+)?|\d+(?:,\d{3})*(?:\.\d+)?\s?円/] },
+            { type: '数値', patterns: [/^\d+(?:\.\d+)?(?:円|%|￥|$)?$|^\d{1,3}(?:,\d{3})*(?:\.\d+)?$/] },
+        ];
+        const KEYWORD_RULES = [
+            { type: '割引', keywords: ['OFF', '割引', '%引き', '割'] },
+            { type: '期限', keywords: ['期限', 'まで', '有効'] },
+        ];
+
+        let ocrResults = [];
+
+        const cameraBtn = document.getElementById('cameraBtn');
+        const fileBtn = document.getElementById('fileBtn');
+        const cameraInput = document.getElementById('cameraInput');
+        const fileInput = document.getElementById('fileInput');
+        const imagePreview = document.getElementById('imagePreview');
+        const previewImg = document.getElementById('previewImg');
+        const loadingDiv = document.getElementById('loadingDiv');
+        const resultsSection = document.getElementById('resultsSection');
+        const ocrTableBody = document.getElementById('ocrTableBody');
+        const exportCsvBtn = document.getElementById('exportCsvBtn');
+        const expirationInfo = document.getElementById('expirationInfo');
+        const expirationDetails = document.getElementById('expirationDetails');
+        const errorDisplay = document.getElementById('errorDisplay');
+        const errorDisplayText = document.getElementById('errorDisplayText');
+
+        cameraBtn.addEventListener('click', () => cameraInput.click());
+        fileBtn.addEventListener('click', () => fileInput.click());
+        cameraInput.addEventListener('change', handleImageUpload);
+        fileInput.addEventListener('change', handleImageUpload);
+        exportCsvBtn.addEventListener('click', exportToCsv);
+
+        function showError(message) {
+            errorDisplayText.textContent = message;
+            errorDisplay.classList.remove('hidden');
+        }
+        function hideError() {
+            errorDisplay.classList.add('hidden');
+        }
+
+        function handleImageUpload(event) {
+            hideError();
+            const file = event.target.files[0];
+            if (!file) { return; }
+            if (!file.type.startsWith('image/')) {
+                showError('画像ファイルを選択してください。');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                previewImg.src = e.target.result;
+                imagePreview.classList.remove('hidden');
+                resultsSection.classList.add('hidden');
+                processOCR(e.target.result);
+            };
+            reader.onerror = function(e) {
+                console.error('ファイル読み込みエラー:', e);
+                showError('画像の読み込みに失敗しました。');
+                loadingDiv.classList.add('hidden');
+            };
+            reader.readAsDataURL(file);
+            event.target.value = null;
+        }
+
+        async function processOCR(imageData) {
+            hideError();
+            loadingDiv.classList.remove('hidden');
+            resultsSection.classList.add('hidden');
+            ocrResults = [];
+
+            try {
+                // ▼▼▼ 修正箇所 ▼▼▼
+                // APIキーが空でないかどうかの基本的なチェックのみを行います。
+                // 特定の文字列との一致チェックは削除しました。
+                if (!API_KEY) { 
+                     throw new Error('APIキーが設定されていません。クライアントサイドでのAPIキーの使用は非推奨です。');
+                }
+                // ▲▲▲ 修正箇所 ▲▲▲
+                
+                const base64Image = imageData.split(',')[1];
+                const requestBody = {
+                    requests: [{
+                        image: { content: base64Image },
+                        features: [{ type: 'TEXT_DETECTION', maxResults: OCR_SETTINGS.MAX_RESULTS }]
+                    }]
+                };
+
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) {
+                    let errorMessage = `APIリクエスト失敗: ${response.status} ${response.statusText}`;
+                    try {
+                        const errorData = await response.json();
+                        if (errorData && errorData.error && errorData.error.message) {
+                            errorMessage += `. 詳細: ${errorData.error.message}`;
+                        }
+                    } catch (jsonError) { /* JSONパースエラーの場合は何もしない */ }
+                    throw new Error(errorMessage);
+                }
+
+                const data = await response.json();
+                if (data.responses && data.responses[0] && data.responses[0].textAnnotations && data.responses[0].textAnnotations.length > 0) {
+                    const fullTextAnnotation = data.responses[0].textAnnotations[0];
+                    if (!fullTextAnnotation || !fullTextAnnotation.description) {
+                        throw new Error('テキストが検出されませんでした (descriptionが見つかりません)。');
+                    }
+                    const fullText = fullTextAnnotation.description;
+                    const lines = fullText.split('\n').filter(line => line.trim() !== '');
+                    ocrResults = lines.map((line, index) => {
+                        const trimmedLine = line.trim();
+                        return {
+                            lineNumber: index + 1,
+                            text: trimmedLine,
+                            charCount: trimmedLine.length,
+                            type: classifyText(trimmedLine)
+                        };
+                    });
+                    displayResults();
+                    displayExpirationInfo();
+                    displayStats();
+                    resultsSection.classList.remove('hidden');
+                } else if (data.responses && data.responses[0] && data.responses[0].error) {
+                    throw new Error(`Vision APIエラー: ${data.responses[0].error.message}`);
+                } else {
+                    throw new Error('テキストが検出されませんでした。APIレスポンスの形式が予期されたものではありません。');
+                }
+            } catch (error) {
+                console.error('OCR処理エラー:', error);
+                showError('OCR処理中にエラーが発生しました: ' + error.message);
+            } finally {
+                loadingDiv.classList.add('hidden');
+            }
+        }
+
+        function classifyText(text) {
+            for (const rule of CLASSIFICATION_RULES) {
+                if (rule.patterns.some(pattern => pattern.test(text))) { return rule.type; }
+            }
+            for (const rule of KEYWORD_RULES) {
+                if (rule.keywords.some(keyword => text.toLowerCase().includes(keyword.toLowerCase()))) { return rule.type; }
+            }
+            return 'テキスト';
+        }
+
+        function displayResults() {
+            ocrTableBody.innerHTML = '';
+            if (ocrResults.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td colspan="4" class="text-center py-4">読み取り結果がありません。</td>`;
+                ocrTableBody.appendChild(row);
+                return;
+            }
+            ocrResults.forEach(result => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50';
+                const highlightClass = (result.type === '日付' || result.type === '期限') ? 'expiration-highlight' : '';
+                row.innerHTML = `
+                    <td class="border border-gray-300 px-4 py-2 text-sm">${result.lineNumber}</td>
+                    <td class="border border-gray-300 px-4 py-2 text-sm ${highlightClass}">${escapeHtml(result.text)}</td>
+                    <td class="border border-gray-300 px-4 py-2 text-sm text-center">${result.charCount}</td>
+                    <td class="border border-gray-300 px-4 py-2 text-sm">
+                        <span class="inline-block px-2 py-1 text-xs font-semibold rounded-full ${getTypeColor(result.type)}">
+                            ${result.type}
+                        </span>
+                    </td>
+                `;
+                ocrTableBody.appendChild(row);
+            });
+        }
+
+        function displayExpirationInfo() {
+            const expirationTexts = ocrResults.filter(result => result.type === '日付' || result.type === '期限');
+            if (expirationTexts.length > 0) {
+                expirationDetails.innerHTML = expirationTexts.map(item => 
+                    `<div class="mb-1"><strong>行${item.lineNumber}:</strong> ${escapeHtml(item.text)}</div>`
+                ).join('');
+                expirationInfo.classList.remove('hidden');
+            } else {
+                expirationDetails.innerHTML = '';
+                expirationInfo.classList.add('hidden');
+            }
+        }
+
+        function displayStats() {
+            const totalLines = ocrResults.length;
+            const totalChars = ocrResults.reduce((sum, result) => sum + result.charCount, 0);
+            const dateCount = ocrResults.filter(result => result.type === '日付').length;
+            const numberCount = ocrResults.filter(result => result.type === '数値' || result.type === '価格').length;
+            document.getElementById('totalLines').textContent = totalLines;
+            document.getElementById('totalChars').textContent = totalChars;
+            document.getElementById('dateCount').textContent = dateCount;
+            document.getElementById('numberCount').textContent = numberCount;
+        }
+
+        function exportToCsv() {
+            if (ocrResults.length === 0) {
+                showError('エクスポートするデータがありません。');
+                return;
+            }
+            hideError();
+            const headers = ['行番号', '読み取りテキスト', '文字数', '種別'];
+            const csvRows = [
+                headers.join(','),
+                ...ocrResults.map(result => [
+                    result.lineNumber, `"${result.text.replace(/"/g, '""')}"`, result.charCount, result.type
+                ].join(','))
+            ];
+            const csvContent = csvRows.join('\n');
+            const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            link.setAttribute('download', `coupon_ocr_${timestamp}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function escapeHtml(text) {
+            if (typeof text !== 'string') return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function getTypeColor(type) {
+            const colors = {
+                '日付': 'bg-yellow-100 text-yellow-800', '価格': 'bg-green-100 text-green-800',
+                '数値': 'bg-blue-100 text-blue-800', '割引': 'bg-red-100 text-red-800',
+                '期限': 'bg-orange-100 text-orange-800', 'テキスト': 'bg-gray-200 text-gray-800'
+            };
+            return colors[type] || 'bg-gray-100 text-gray-800';
+        }
+    </script>
+</body>
+</html>
